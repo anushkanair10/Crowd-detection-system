@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Image for Crowd Detection</title>
+</head>
+<body>
+    <h2>Automatic Crowd Detection via Webcam</h2>
+
+    <!-- Video element to show webcam feed -->
+    <video id="webcam" width="640" height="480" autoplay></video>
+
+    <p id="detectionMessage">Detecting faces...</p>
+    <p>Total People Detected: <span id="count">0</span></p>
+
+    <script>
+        // Access the webcam and start capturing video
+        const videoElement = document.getElementById('webcam');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const detectionMessage = document.getElementById('detectionMessage');
+        const countElement = document.getElementById('count');
+
+        let videoStream = null;
+
+        // Start the webcam feed as soon as the page loads
+        async function startWebcam() {
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                videoElement.srcObject = videoStream;
+            } catch (err) {
+                console.error("Error accessing webcam: ", err);
+                detectionMessage.textContent = "Error accessing webcam.";
+            }
+        }
+
+        // Function to capture the webcam image and send it for face detection
+        function captureAndDetect() {
+            if (videoStream && videoElement.readyState >= 2) {
+                // Set the canvas size to match the video dimensions
+                canvas.width = videoElement.videoWidth;
+                canvas.height = videoElement.videoHeight;
+
+                // Draw the current video frame onto the canvas
+                ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+                // Convert the canvas image to base64
+                const base64Image = canvas.toDataURL('image/jpeg');
+
+                // Send the image to Flask for crowd detection
+                fetch('http://127.0.0.1:5000/detect_crowd', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: base64Image })  // Send the base64 image
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Update the result based on the detection
+                    countElement.textContent = data.num_faces;
+
+                    if (data.crowd_detected) {
+                        detectionMessage.textContent = "Crowd detected!";
+                        
+                        // Announce via speech if crowd is detected
+                        const msg = new SpeechSynthesisUtterance("Crowd detected! Please ensure proper safety.");
+                        window.speechSynthesis.speak(msg);
+                    } else {
+                        detectionMessage.textContent = "No crowd detected.";
+                    }
+                })
+                .catch(error => {
+                    console.error("Error detecting crowd:", error);
+                    detectionMessage.textContent = "Error detecting crowd.";
+                });
+            }
+        }
+
+        // Start webcam on page load
+        startWebcam();
+
+        // Continuously capture and detect every 1 second
+        setInterval(captureAndDetect, 1000); // Adjust interval as needed
+
+    </script>
+</body>
+</html>
